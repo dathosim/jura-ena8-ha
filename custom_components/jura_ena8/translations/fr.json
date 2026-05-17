@@ -1,0 +1,70 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "JURA ENA 8 — Connexion",
+        "description": "Configurez la connexion à votre machine JURA ENA 8.",
+        "data": {
+          "host": "Adresse IP",
+          "port": "Port",
+          "device_name": "Nom de l'appareil",
+          "scan_interval": "Intervalle de mise à jour (secondes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter à la machine"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "État"
+      }
+    },
+    "select": {
+      "coffee_type": {
+        "name": "Boisson",
+        "state": {
+          "espresso": "Espresso",
+          "ristretto": "Ristretto",
+          "espresso_doppio": "Espresso Doppio",
+          "coffee": "Café",
+          "cappuccino": "Cappuccino",
+          "flat_white": "Flat White",
+          "latte_macchiato": "Latte Macchiato",
+          "espresso_macchiato": "Espresso Macchiato",
+          "hot_water": "Eau chaude",
+          "milk_foam": "Mousse de lait"
+        }
+      }
+    },
+    "number": {
+      "water_amount": { "name": "Quantité d'eau" },
+      "coffee_strength": { "name": "Force du café" }
+    },
+    "button": {
+      "make_coffee": { "name": "Préparer" },
+      "espresso": { "name": "Espresso" },
+      "ristretto": { "name": "Ristretto" },
+      "espresso_doppio": { "name": "Espresso Doppio" },
+      "coffee": { "name": "Café" },
+      "cappuccino": { "name": "Cappuccino" },
+      "flat_white": { "name": "Flat White" },
+      "latte_macchiato": { "name": "Latte Macchiato" },
+      "espresso_macchiato": { "name": "Espresso Macchiato" },
+      "hot_water": { "name": "Eau chaude" },
+      "milk_foam": { "name": "Mousse de lait" }
+    },
+    "binary_sensor": {
+      "cleaning_needed": { "name": "Nettoyage nécessaire" },
+      "descaling_needed": { "name": "Détartrage nécessaire" },
+      "filter_needed": { "name": "Changement du filtre nécessaire" },
+      "fill_water": { "name": "Remplir le réservoir d'eau" },
+      "empty_grounds": { "name": "Vider le marc" },
+      "empty_tray": { "name": "Vider le bac égouttoir" },
+      "add_beans": { "name": "Ajouter des grains" },
+      "maintenance_needed": { "name": "Maintenance nécessaire" }
+    }
+  }
+}

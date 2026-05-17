@@ -1,0 +1,70 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "JURA ENA 8 — Connection",
+        "description": "Configure the connection to your JURA ENA 8 machine.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "device_name": "Device name",
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the machine"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      }
+    },
+    "select": {
+      "coffee_type": {
+        "name": "Beverage",
+        "state": {
+          "espresso": "Espresso",
+          "ristretto": "Ristretto",
+          "espresso_doppio": "Espresso Doppio",
+          "coffee": "Coffee",
+          "cappuccino": "Cappuccino",
+          "flat_white": "Flat White",
+          "latte_macchiato": "Latte Macchiato",
+          "espresso_macchiato": "Espresso Macchiato",
+          "hot_water": "Hot Water",
+          "milk_foam": "Milk Foam"
+        }
+      }
+    },
+    "number": {
+      "water_amount": { "name": "Water quantity" },
+      "coffee_strength": { "name": "Coffee strength" }
+    },
+    "button": {
+      "make_coffee": { "name": "Make coffee" },
+      "espresso": { "name": "Espresso" },
+      "ristretto": { "name": "Ristretto" },
+      "espresso_doppio": { "name": "Espresso Doppio" },
+      "coffee": { "name": "Coffee" },
+      "cappuccino": { "name": "Cappuccino" },
+      "flat_white": { "name": "Flat White" },
+      "latte_macchiato": { "name": "Latte Macchiato" },
+      "espresso_macchiato": { "name": "Espresso Macchiato" },
+      "hot_water": { "name": "Hot Water" },
+      "milk_foam": { "name": "Milk Foam" }
+    },
+    "binary_sensor": {
+      "cleaning_needed": { "name": "Cleaning needed" },
+      "descaling_needed": { "name": "Descaling needed" },
+      "filter_needed": { "name": "Water filter change needed" },
+      "fill_water": { "name": "Fill water tank" },
+      "empty_grounds": { "name": "Empty grounds container" },
+      "empty_tray": { "name": "Empty drip tray" },
+      "add_beans": { "name": "Add beans" },
+      "maintenance_needed": { "name": "Maintenance needed" }
+    }
+  }
+}
