@@ -357,6 +357,10 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.current_water_ml: int = PRODUCTS["espresso"][3]
         # Strength level 1-10; None for products without grinder (hot_water, milk_foam)
         self.current_strength: int | None = PRODUCT_STRENGTH_DEFAULTS["espresso"]
+        # Consecutive TCP failures — show "unavailable" only after several failures
+        # (during brewing the machine refuses connections → we keep the last known state)
+        self._consecutive_failures: int = 0
+        self._MAX_FAILURES_BEFORE_UNAVAILABLE: int = 3  # 3 × scan_interval ≈ 90 s
 
     # ── token persistence ────────────────────────────────────────────────────
 
@@ -437,6 +441,24 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.error("JURA unexpected error in update: %s", exc)
                 data = {"state": STATE_UNAVAILABLE, "raw": None}
 
+        if data["state"] == STATE_UNAVAILABLE:
+            self._consecutive_failures += 1
+            if (
+                self._consecutive_failures < self._MAX_FAILURES_BEFORE_UNAVAILABLE
+                and self.data is not None
+            ):
+                # Machine is temporarily unreachable (busy brewing, single TCP slot)
+                # → keep the last known state rather than flashing "Unavailable"
+                _LOGGER.debug(
+                    "JURA: connection failed (%d/%d), keeping last state: %s",
+                    self._consecutive_failures,
+                    self._MAX_FAILURES_BEFORE_UNAVAILABLE,
+                    self.data.get("state"),
+                )
+                return self.data
+        else:
+            self._consecutive_failures = 0
+
         # Persist token if it changed
         if self.token != self.hass.data.get(DOMAIN, {}).get("token", ""):
             self.hass.data.setdefault(DOMAIN, {})["token"] = self.token
@@ -477,7 +499,14 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Persist token after successful brew (auth may have refreshed it)
         await self._async_save_token(self.token)
-        # Request an immediate status refresh
+
+        # Immediately show "brewing" state — the machine won't accept a new
+        # TCP connection while dispensing, so the next poll(s) would fail.
+        # Reset consecutive failures so those polls preserve this "brewing" state.
+        self._consecutive_failures = 0
+        self.async_set_updated_data({"state": "brewing", "raw": None})
+
+        # Request an immediate status refresh (will likely keep "brewing" on first try)
         await self.async_request_refresh()
 
     def get_token(self) -> str:
