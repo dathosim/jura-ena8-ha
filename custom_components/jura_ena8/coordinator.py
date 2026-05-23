@@ -320,8 +320,13 @@ def _parse_tf_response(resp: str | None) -> dict[str, Any]:
         if len(data) >= 2:
             state_code = data[0:2].upper()
             state = MACHINE_STATES.get(state_code, f"unknown_{state_code}")
-            return {"state": state, "raw": resp}
-        return {"state": STATE_READY, "raw": resp}
+            # Expose all bytes as a dict for debugging unknown states
+            bytes_debug = {
+                f"byte_{i}": data[i*2:(i*2)+2].upper()
+                for i in range(len(data) // 2)
+            }
+            return {"state": state, "raw": resp, "bytes": bytes_debug}
+        return {"state": STATE_READY, "raw": resp, "bytes": {}}
 
     # @TV: frames = telemetry values (temperatures, flow…), not a state change
     # → machine is alive and ready when it pushes these

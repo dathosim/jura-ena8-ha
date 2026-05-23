@@ -66,6 +66,7 @@ class JuraMachineSensor(CoordinatorEntity[JuraCoordinator], SensorEntity):
         return {
             "state_key": state_key,
             "raw_response": raw,
+            "frame_bytes": self.coordinator.data.get("bytes", {}) if self.coordinator.data else {},
         }
 
     @property

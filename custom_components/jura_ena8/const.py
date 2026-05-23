@@ -85,7 +85,7 @@ MACHINE_STATES: dict[str, str] = {
     "21": "heating_up",
     "24": "coffee_ready",
     "25": "shutting_down",
-    "40": "warming_up",       # initial heat-up on power-on (ENA 8, observed)
+    "40": "fill_water",       # ENA 8: water tank empty (confirmed from @TF: frame observation)
     # ── Maintenance needed ────────────────────────────────────────────────────
     "01": "insert_tray",
     "02": "fill_water",
@@ -119,7 +119,7 @@ MACHINE_STATE_LABELS: dict[str, str] = {
     "heating_up":          "Heating up",
     "coffee_ready":        "Coffee ready",
     "shutting_down":       "Shutting down",
-    "warming_up":          "Warming up…",
+    "warming_up":          "Warming up…",        # kept for backwards compat
     "insert_tray":         "Insert drip tray",
     "fill_water":          "Fill water tank",
     "empty_grounds":       "Empty grounds container",
