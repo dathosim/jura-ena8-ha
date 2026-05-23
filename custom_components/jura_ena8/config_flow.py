@@ -41,7 +41,7 @@ def _schema_for_mode(mode: str) -> vol.Schema:
     if mode == CONNECTION_MODE_POLLING:
         fields[
             vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL)
-        ] = vol.All(vol.Coerce(int), vol.Range(min=5, max=3600))
+        ] = vol.All(vol.Coerce(int), vol.Range(min=3, max=3600))
     return vol.Schema(fields)
 
 
@@ -141,8 +141,10 @@ class JuraEna8OptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
-        self._selected_mode: str = config_entry.data.get(
-            CONF_CONNECTION_MODE, DEFAULT_CONNECTION_MODE
+        # Read from options first (saved by previous Configure), then fall back to data
+        self._selected_mode: str = config_entry.options.get(
+            CONF_CONNECTION_MODE,
+            config_entry.data.get(CONF_CONNECTION_MODE, DEFAULT_CONNECTION_MODE),
         )
 
     async def async_step_init(
@@ -187,5 +189,5 @@ class JuraEna8OptionsFlow(config_entries.OptionsFlow):
         if self._selected_mode == CONNECTION_MODE_POLLING:
             fields[
                 vol.Optional(CONF_SCAN_INTERVAL, default=current_interval)
-            ] = vol.All(vol.Coerce(int), vol.Range(min=5, max=3600))
+            ] = vol.All(vol.Coerce(int), vol.Range(min=3, max=3600))
         return vol.Schema(fields)
