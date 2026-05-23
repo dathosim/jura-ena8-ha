@@ -328,9 +328,28 @@ def _parse_tf_response(resp: str | None) -> dict[str, Any]:
             return {"state": state, "raw": resp, "bytes": bytes_debug}
         return {"state": STATE_READY, "raw": resp, "bytes": {}}
 
-    # @TV: frames = telemetry values (temperatures, flow…), not a state change
-    # → machine is alive and ready when it pushes these
-    return {"state": STATE_READY, "raw": resp}
+    if resp.startswith("@TV:"):
+        data = resp[4:]
+        bytes_list = [data[i*2:(i*2)+2].upper() for i in range(len(data) // 2) if len(data[i*2:(i*2)+2]) == 2]
+        bytes_debug = {f"byte_{i}": b for i, b in enumerate(bytes_list)}
+
+        # byte_4 = water flow counter: increments while coffee is being dispensed
+        # When > 0 and not FF (no sensor) → machine is actively dispensing
+        if len(bytes_list) >= 5:
+            flow_hex = bytes_list[4]
+            if flow_hex != "FF":
+                try:
+                    flow = int(flow_hex, 16)
+                    if flow > 0:
+                        return {"state": "dispensing", "raw": resp, "bytes": bytes_debug}
+                except ValueError:
+                    pass
+
+        # @TV: without flow = machine alive (heating, keeping warm, or idle)
+        return {"state": STATE_READY, "raw": resp, "bytes": bytes_debug}
+
+    # Unknown frame type → machine alive
+    return {"state": STATE_READY, "raw": resp, "bytes": {}}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
