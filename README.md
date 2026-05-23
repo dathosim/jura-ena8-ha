@@ -80,7 +80,36 @@ Go to **Settings → Devices & Services → Add Integration → JURA ENA 8**.
 | IP address | `192.168.1.x` | Machine IP on your local network |
 | Port | `51515` | JURA WiFi protocol port |
 | Device name | `Home Assistant` | Name shown on the machine pairing screen |
-| Polling interval | `30` s | How often to refresh the machine state |
+| Connection mode | `polling` | See below |
+| Polling interval | `30` s | How often to refresh the machine state (polling mode only) |
+
+These options can be changed at any time via **Settings → Devices & Services → JURA ENA 8 → Configure**.
+
+---
+
+## Connection modes
+
+![Connection mode option in Home Assistant](docs/options_connection_mode.png)
+
+### Polling (default)
+
+The integration connects to the machine every N seconds (configurable, 5–3600 s), reads the state, then disconnects.
+
+| Pros | Cons |
+|---|---|
+| Compatible with the J.O.E.® app simultaneously | Up to N seconds delay to detect a manual brew |
+| Lower resource usage | Shows **Brewing…** only when brew is triggered from HA |
+
+### Persistent
+
+The integration maintains a permanent TCP connection and receives `@TF:` push frames in real time as soon as the machine state changes.
+
+| Pros | Cons |
+|---|---|
+| Instant state updates — manual brews visible immediately | J.O.E.® app cannot connect while HA holds the connection |
+| State changes (maintenance, rinsing…) detected instantly | HA reconnects automatically if the app takes over |
+
+> **Note**: The machine only accepts one TCP connection at a time. In persistent mode, opening the J.O.E.® app will disconnect HA momentarily — HA reconnects automatically within a few seconds once the app releases the connection.
 
 ---
 
