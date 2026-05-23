@@ -13,6 +13,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_CONNECTION_MODE,
+    CONNECTION_MODE_PERSISTENT,
+    CONNECTION_MODE_POLLING,
+    DEFAULT_CONNECTION_MODE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MACHINE_STATES,
@@ -325,6 +329,49 @@ def _parse_tf_response(resp: str | None) -> dict[str, Any]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Async helpers for persistent connection mode
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def _async_recv_frame(
+    reader: asyncio.StreamReader, timeout: float = 60.0
+) -> str | None:
+    """Read one CRLF-terminated JURA frame asynchronously."""
+    try:
+        data = await asyncio.wait_for(reader.readuntil(b"\x0D\x0A"), timeout=timeout)
+        return _parse_frame(bytes(data))
+    except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError):
+        return None
+
+
+async def _async_send_frame(writer: asyncio.StreamWriter, cmd: str) -> None:
+    """Send an encrypted JURA frame asynchronously."""
+    writer.write(_make_frame(cmd))
+    await writer.drain()
+
+
+async def _async_authenticate(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    device_name: str,
+    token: str,
+) -> tuple[bool, str]:
+    """Async version of the @HP: handshake."""
+    device_id = _hex_encode(device_name)
+    cmd = f"@HP:,{device_id},{token}" if token else f"@HP:,{device_id},"
+    await _async_send_frame(writer, cmd)
+    resp = await _async_recv_frame(reader, timeout=TCP_RECV_TIMEOUT)
+    if resp is None:
+        return False, token
+    if resp.startswith("@hp4"):
+        parts = resp.split(":")
+        new_token = parts[1].strip() if len(parts) > 1 and parts[1].strip() else token
+        return True, new_token
+    if resp.startswith("@hp5"):
+        return False, ""
+    return False, token
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Coordinator
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -339,17 +386,25 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device_name: str,
         token: str,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
+        connection_mode: str = DEFAULT_CONNECTION_MODE,
     ) -> None:
+        # Persistent mode disables the built-in polling timer (update_interval=None)
+        update_interval = (
+            None
+            if connection_mode == CONNECTION_MODE_PERSISTENT
+            else timedelta(seconds=scan_interval)
+        )
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=scan_interval),
+            update_interval=update_interval,
         )
         self._host = host
         self._port = port
         self._device_name = device_name
         self.token = token
+        self._connection_mode = connection_mode
         self._lock = asyncio.Lock()
         # Currently selected product (used by JuraCoffeeSelect + JuraMakeCoffeeButton)
         self.selected_product: str = "espresso"
@@ -361,6 +416,11 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # (during brewing the machine refuses connections → we keep the last known state)
         self._consecutive_failures: int = 0
         self._MAX_FAILURES_BEFORE_UNAVAILABLE: int = 3  # 3 × scan_interval ≈ 90 s
+        # Persistent connection mode internals
+        self._persistent_task: asyncio.Task | None = None
+        self._persistent_writer: asyncio.StreamWriter | None = None
+        self._persistent_reader: asyncio.StreamReader | None = None
+        self._persistent_stop = asyncio.Event()
 
     # ── token persistence ────────────────────────────────────────────────────
 
@@ -466,6 +526,112 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return data
 
+    # ── persistent connection management ──────────────────────────────────────
+
+    async def async_start_persistent(self) -> None:
+        """Start the persistent TCP connection background task."""
+        if self._connection_mode != CONNECTION_MODE_PERSISTENT:
+            return
+        self._persistent_stop.clear()
+        self._persistent_task = self.hass.loop.create_task(
+            self._persistent_loop(), name="jura_ena8_persistent"
+        )
+        _LOGGER.info("JURA: persistent connection mode started")
+
+    async def async_stop_persistent(self) -> None:
+        """Stop the persistent TCP connection background task."""
+        self._persistent_stop.set()
+        if self._persistent_writer:
+            try:
+                self._persistent_writer.close()
+                await self._persistent_writer.wait_closed()
+            except Exception:
+                pass
+            self._persistent_writer = None
+            self._persistent_reader = None
+        if self._persistent_task and not self._persistent_task.done():
+            self._persistent_task.cancel()
+            try:
+                await self._persistent_task
+            except asyncio.CancelledError:
+                pass
+        _LOGGER.info("JURA: persistent connection mode stopped")
+
+    async def _persistent_loop(self) -> None:
+        """Background task: keep a live TCP connection for real-time push frames."""
+        backoff = 5.0
+        while not self._persistent_stop.is_set():
+            writer: asyncio.StreamWriter | None = None
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self._host, self._port),
+                    timeout=TCP_CONNECT_TIMEOUT,
+                )
+                backoff = 5.0  # reset on successful connect
+
+                ok, new_token = await _async_authenticate(
+                    reader, writer, self._device_name, self.token
+                )
+                if not ok:
+                    _LOGGER.warning("JURA persistent: auth failed, retrying in %.0fs", backoff)
+                    writer.close()
+                    await asyncio.sleep(backoff)
+                    continue
+
+                self.token = new_token
+                self._persistent_reader = reader
+                self._persistent_writer = writer
+                _LOGGER.debug("JURA persistent: connected and authenticated")
+
+                # Get initial state
+                resp = await _async_recv_frame(reader, timeout=TCP_PUSH_WAIT)
+                if resp is None:
+                    await _async_send_frame(writer, "@AN:00")
+                    resp = await _async_recv_frame(reader, timeout=TCP_RECV_TIMEOUT)
+                if resp:
+                    self.async_set_updated_data(_parse_tf_response(resp))
+
+                # Real-time push frame reading loop
+                while not self._persistent_stop.is_set():
+                    frame = await _async_recv_frame(reader, timeout=90.0)
+                    if frame is None:
+                        _LOGGER.debug("JURA persistent: connection lost, reconnecting…")
+                        break
+                    data = _parse_tf_response(frame)
+                    _LOGGER.debug("JURA persistent RX: %s", data.get("state"))
+                    self.async_set_updated_data(data)
+
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                _LOGGER.warning("JURA persistent: error: %s", exc)
+            finally:
+                self._persistent_reader = None
+                self._persistent_writer = None
+                if writer:
+                    try:
+                        writer.close()
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
+
+            if self._persistent_stop.is_set():
+                return
+            _LOGGER.debug("JURA persistent: reconnecting in %.0fs", backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 1.5, 60.0)
+
+    async def _async_drop_persistent_connection(self) -> None:
+        """Close the persistent connection so a brew can use the TCP slot."""
+        if self._persistent_writer:
+            try:
+                self._persistent_writer.close()
+                await self._persistent_writer.wait_closed()
+            except Exception:
+                pass
+            self._persistent_writer = None
+            self._persistent_reader = None
+
     # ── public command API ────────────────────────────────────────────────────
 
     async def async_brew(self, product_key: str, water_ml: int | None = None, strength: int | None = None) -> None:
@@ -484,6 +650,11 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             product_key, actual_water, actual_strength,
         )
 
+        # In persistent mode, release the TCP slot so the brew can connect
+        if self._connection_mode == CONNECTION_MODE_PERSISTENT:
+            await self._async_drop_persistent_connection()
+            await asyncio.sleep(0.3)  # brief pause for TCP to fully close
+
         async with self._lock:
             try:
                 success = await self.hass.async_add_executor_job(
@@ -500,14 +671,14 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Persist token after successful brew (auth may have refreshed it)
         await self._async_save_token(self.token)
 
-        # Immediately show "brewing" state — the machine won't accept a new
-        # TCP connection while dispensing, so the next poll(s) would fail.
-        # Reset consecutive failures so those polls preserve this "brewing" state.
+        # Immediately show "brewing" state
         self._consecutive_failures = 0
         self.async_set_updated_data({"state": "brewing", "raw": None})
 
-        # Request an immediate status refresh (will likely keep "brewing" on first try)
-        await self.async_request_refresh()
+        if self._connection_mode == CONNECTION_MODE_POLLING:
+            # Polling: request a status refresh after the brew
+            await self.async_request_refresh()
+        # Persistent: the loop will reconnect automatically and receive push frames
 
     def get_token(self) -> str:
         """Return the current authentication token."""

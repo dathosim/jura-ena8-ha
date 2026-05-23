@@ -5,6 +5,12 @@ DOMAIN = "jura_ena8"
 DEFAULT_PORT = 51515
 DEFAULT_SCAN_INTERVAL = 30  # seconds
 
+# Connection modes
+CONNECTION_MODE_POLLING    = "polling"
+CONNECTION_MODE_PERSISTENT = "persistent"
+DEFAULT_CONNECTION_MODE    = CONNECTION_MODE_POLLING
+CONF_CONNECTION_MODE       = "connection_mode"
+
 # Products: (product_code, grinder_byte, strength, water_ml, temperature_code)
 # temperature: "00"=Low, "01"=Normal, "02"=High
 PRODUCTS: dict[str, tuple[str, str, str, int, str]] = {

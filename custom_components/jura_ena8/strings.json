@@ -8,7 +8,27 @@
           "host": "IP address",
           "port": "Port",
           "device_name": "Device name",
+          "connection_mode": "Connection mode",
           "scan_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "connection_mode": "Polling: connects every N seconds. Persistent: stays connected for real-time updates (J.O.E. app cannot connect simultaneously).",
+          "scan_interval": "How often to refresh the machine state (polling mode only)."
+        }
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "JURA ENA 8 — Options",
+          "data": {
+            "connection_mode": "Connection mode",
+            "scan_interval": "Polling interval (seconds)"
+          },
+          "data_description": {
+            "connection_mode": "Polling: connects every N seconds. Persistent: stays connected for real-time updates (J.O.E. app cannot connect simultaneously).",
+            "scan_interval": "How often to refresh the machine state (polling mode only)."
+          }
         }
       }
     },

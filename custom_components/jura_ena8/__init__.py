@@ -12,7 +12,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, TOKEN_STORAGE_FILE
+from .const import (
+    CONF_CONNECTION_MODE,
+    CONNECTION_MODE_PERSISTENT,
+    DEFAULT_CONNECTION_MODE,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    TOKEN_STORAGE_FILE,
+)
 from .coordinator import JuraCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,7 +55,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host: str = entry.data[CONF_HOST]
     port: int = int(entry.data[CONF_PORT])
     device_name: str = entry.data[CONF_DEVICE_NAME]
-    scan_interval: int = int(entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+    scan_interval: int = int(
+        entry.options.get(CONF_SCAN_INTERVAL,
+        entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+    )
+    connection_mode: str = entry.options.get(
+        CONF_CONNECTION_MODE,
+        entry.data.get(CONF_CONNECTION_MODE, DEFAULT_CONNECTION_MODE),
+    )
 
     # Load persisted token (survives HA restarts)
     token_path = hass.config.path(f".storage/{TOKEN_STORAGE_FILE}")
@@ -65,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         device_name=device_name,
         token=token,
         scan_interval=scan_interval,
+        connection_mode=connection_mode,
     )
 
     # Perform the first refresh.  If the machine is offline we still set up
@@ -89,6 +104,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Start persistent connection loop if needed (after platforms are set up)
+    if connection_mode == CONNECTION_MODE_PERSISTENT:
+        await coordinator.async_start_persistent()
+
     _LOGGER.info(
         "JURA ENA 8 integration set up: host=%s port=%d device=%s",
         host,
@@ -100,6 +119,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    coordinator: JuraCoordinator = hass.data[DOMAIN].get(entry.entry_id)
+    if coordinator:
+        await coordinator.async_stop_persistent()
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:

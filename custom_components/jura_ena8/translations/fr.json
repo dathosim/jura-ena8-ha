@@ -8,7 +8,27 @@
           "host": "Adresse IP",
           "port": "Port",
           "device_name": "Nom de l'appareil",
+          "connection_mode": "Mode de connexion",
           "scan_interval": "Intervalle de mise à jour (secondes)"
+        },
+        "data_description": {
+          "connection_mode": "Polling : se connecte toutes les N secondes. Persistant : connexion permanente pour des mises à jour en temps réel (l'app J.O.E. ne peut pas se connecter simultanément).",
+          "scan_interval": "Fréquence de mise à jour de l'état (mode polling uniquement)."
+        }
+      }
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "JURA ENA 8 — Options",
+          "data": {
+            "connection_mode": "Mode de connexion",
+            "scan_interval": "Intervalle de mise à jour (secondes)"
+          },
+          "data_description": {
+            "connection_mode": "Polling : se connecte toutes les N secondes. Persistant : connexion permanente pour des mises à jour en temps réel (l'app J.O.E. ne peut pas se connecter simultanément).",
+            "scan_interval": "Fréquence de mise à jour de l'état (mode polling uniquement)."
+          }
         }
       }
     },
