@@ -315,18 +315,35 @@ def _parse_tf_response(resp: str | None) -> dict[str, Any]:
 
     if resp.startswith("@TF:"):
         data = resp[4:]  # hex chars after "@TF:"
-        # Byte 0 (chars 0-1) = PROGRESS_STATE_INTAKE (machine state)
-        # e.g. "@TF:000400000C0000" → data[0:2] = "00" = ready
-        if len(data) >= 2:
-            state_code = data[0:2].upper()
-            state = MACHINE_STATES.get(state_code, f"unknown_{state_code}")
-            # Expose all bytes as a dict for debugging unknown states
-            bytes_debug = {
-                f"byte_{i}": data[i*2:(i*2)+2].upper()
-                for i in range(len(data) // 2)
-            }
-            return {"state": state, "raw": resp, "bytes": bytes_debug}
-        return {"state": STATE_READY, "raw": resp, "bytes": {}}
+        # Parse all bytes for state detection and debugging
+        bytes_list = [
+            data[i*2:(i*2)+2].upper()
+            for i in range(len(data) // 2)
+            if len(data[i*2:(i*2)+2]) == 2
+        ]
+        bytes_debug = {f"byte_{i}": b for i, b in enumerate(bytes_list)}
+
+        if not bytes_list:
+            return {"state": STATE_READY, "raw": resp, "bytes": bytes_debug}
+
+        # Byte 0: primary operational state (ready, brewing, heating, maintenance…)
+        byte_0 = bytes_list[0]
+        state = MACHINE_STATES.get(byte_0, f"unknown_{byte_0}")
+
+        # Byte 1: maintenance alert bitmask (observed on ENA 8)
+        # Normal idle value = 0x04. Extra bits signal alerts:
+        #   bit 5 (0x20) = add_beans (no coffee beans in hopper)
+        # More bits TBD as observed.
+        if byte_0 == "00" and len(bytes_list) >= 2:
+            try:
+                b1 = int(bytes_list[1], 16)
+                b1_alerts = b1 & ~0x04  # mask out the always-on base bit
+                if b1_alerts & 0x20:
+                    state = "add_beans"
+            except ValueError:
+                pass
+
+        return {"state": state, "raw": resp, "bytes": bytes_debug}
 
     if resp.startswith("@TV:"):
         data = resp[4:]
