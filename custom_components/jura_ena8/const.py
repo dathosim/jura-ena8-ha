@@ -81,7 +81,7 @@ MACHINE_STATES: dict[str, str] = {
     "00": "ready",
     "11": "stand_by",
     "15": "please_wait",
-    "20": "brewing",
+    "20": "empty_grounds",  # ENA 8 confirmed: byte_0=20 = "vider marc"
     "21": "heating_up",
     "24": "coffee_ready",
     "25": "shutting_down",
@@ -105,7 +105,8 @@ MACHINE_STATES: dict[str, str] = {
     "0B": "pre_rinsing",
     "0C": "rinsing",          # post-brew rinse / pre-heat rinse (ENA 8)
     "0D": "calc_clean",
-    "88": "dispensing",       # product dispensing phase (ENA 8, observed)
+    "88": "ejecting_grounds",  # ENA 8 confirmed: appears during grounds ejection cycle (NOT dispensing)
+    "A8": "ejecting_grounds",  # ENA 8 confirmed: transition state during grounds ejection
     # ── Special modes ─────────────────────────────────────────────────────────
     "29": "program_mode",
 }
@@ -137,6 +138,7 @@ MACHINE_STATE_LABELS: dict[str, str] = {
     "pre_rinsing":         "Pre-rinsing…",
     "calc_clean":          "Calc-clean cycle",
     "dispensing":          "Dispensing…",
+    "ejecting_grounds":    "Ejecting grounds…",
     "program_mode":        "Program mode",
     "unavailable":         "Unavailable",
 }

@@ -632,14 +632,25 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if resp:
                     self.async_set_updated_data(_parse_tf_response(resp))
 
-                # Real-time push frame reading loop
+                # Real-time push frame reading loop.
+                # We use a short timeout (20 s) so that if the machine goes
+                # quiet (e.g. after clearing an alert like "add_beans"), we
+                # actively poll its current state rather than waiting up to 90 s.
                 while not self._persistent_stop.is_set():
-                    frame = await _async_recv_frame(reader, timeout=90.0)
+                    frame = await _async_recv_frame(reader, timeout=20.0)
                     if frame is None:
-                        _LOGGER.debug("JURA persistent: connection lost, reconnecting…")
-                        break
+                        # No spontaneous push frame — query the machine explicitly
+                        _LOGGER.debug("JURA persistent: no push frame, querying @AN:00")
+                        try:
+                            await _async_send_frame(writer, "@AN:00")
+                            frame = await _async_recv_frame(reader, timeout=TCP_RECV_TIMEOUT)
+                        except Exception:
+                            frame = None
+                        if frame is None:
+                            _LOGGER.debug("JURA persistent: connection lost, reconnecting…")
+                            break
                     data = _parse_tf_response(frame)
-                    _LOGGER.debug("JURA persistent RX: %s", data.get("state"))
+                    _LOGGER.debug("JURA persistent RX: %s → %s", frame, data.get("state"))
                     self.async_set_updated_data(data)
 
             except asyncio.CancelledError:
