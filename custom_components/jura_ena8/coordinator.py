@@ -565,6 +565,7 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.data.setdefault(DOMAIN, {})["token"] = self.token
             await self._async_save_token(self.token)
 
+        self._maybe_notify_unknown_state(data)
         return data
 
     # ── persistent connection management ──────────────────────────────────────
@@ -652,6 +653,7 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     data = _parse_tf_response(frame)
                     _LOGGER.debug("JURA persistent RX: %s → %s", frame, data.get("state"))
                     self.async_set_updated_data(data)
+                    self._maybe_notify_unknown_state(data)
 
             except asyncio.CancelledError:
                 return
@@ -735,6 +737,43 @@ class JuraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_token(self) -> str:
         """Return the current authentication token."""
         return self.token
+
+    # ── diagnostic helpers ────────────────────────────────────────────────────
+
+    def _maybe_notify_unknown_state(self, data: dict[str, Any]) -> None:
+        """Fire a HA persistent notification when an unrecognised frame is received.
+
+        This helps capture new protocol bytes (e.g. cleaning / descaling alerts)
+        without requiring the user to manually press the diagnostic button.
+        """
+        state_key = data.get("state", "")
+        if not state_key.startswith("unknown_"):
+            return
+        raw = data.get("raw", "N/A")
+        frame_bytes = data.get("bytes", {})
+        bytes_str = ", ".join(f"{k}={v}" for k, v in sorted(frame_bytes.items()))
+        _LOGGER.warning(
+            "JURA: unknown frame received — state=%s raw=%s bytes=%s",
+            state_key, raw, frame_bytes,
+        )
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "JURA ENA 8 — Unknown state detected",
+                    "message": (
+                        f"The machine sent an unrecognised frame.\n\n"
+                        f"**State key:** `{state_key}`\n"
+                        f"**Raw frame:** `{raw}`\n"
+                        f"**Bytes:** `{bytes_str}`\n\n"
+                        f"Note what the machine display shows and share this "
+                        f"to help map new protocol states."
+                    ),
+                    "notification_id": "jura_unknown_state",
+                },
+            )
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

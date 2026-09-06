@@ -30,6 +30,10 @@ class JuraBinarySensorDescription(BinarySensorEntityDescription):
     active_states: frozenset[str] = frozenset()
     icon_on: str = "mdi:alert-circle"
     icon_off: str = "mdi:check-circle"
+    # False = detection not yet verified on real ENA 8 hardware.
+    # When False, the sensor returns None (Unknown) instead of False (OK)
+    # so the user knows the reading is not reliable.
+    confirmed_on_ena8: bool = True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +49,7 @@ BINARY_SENSORS: tuple[JuraBinarySensorDescription, ...] = (
         icon_on="mdi:washing-machine-alert",
         icon_off="mdi:washing-machine",
         active_states=frozenset({"needs_cleaning", "cleaning"}),
+        confirmed_on_ena8=False,  # byte_0=05 not yet observed on real ENA 8
     ),
     JuraBinarySensorDescription(
         key="descaling_needed",
@@ -53,6 +58,7 @@ BINARY_SENSORS: tuple[JuraBinarySensorDescription, ...] = (
         icon_on="mdi:water-alert",
         icon_off="mdi:water-check",
         active_states=frozenset({"descaling_needed", "descaling", "calc_clean"}),
+        confirmed_on_ena8=False,  # byte_0=07 not yet observed on real ENA 8
     ),
     JuraBinarySensorDescription(
         key="filter_needed",
@@ -61,6 +67,7 @@ BINARY_SENSORS: tuple[JuraBinarySensorDescription, ...] = (
         icon_on="mdi:air-filter",
         icon_off="mdi:air-filter",
         active_states=frozenset({"change_water_filter"}),
+        confirmed_on_ena8=False,  # byte_0=0E not yet observed on real ENA 8
     ),
     # ── Operational alerts (need user action before brewing) ─────────────────
     JuraBinarySensorDescription(
@@ -146,16 +153,31 @@ class JuraMaintenanceSensor(CoordinatorEntity[JuraCoordinator], BinarySensorEnti
         self._attr_device_info = _device_info(entry)
 
     @property
-    def is_on(self) -> bool:
-        """True when the machine's current state matches one of the active states."""
+    def is_on(self) -> bool | None:
+        """True when the machine state matches an active state.
+
+        Returns None (Unknown) for unconfirmed sensors when the machine is not
+        actively in that state — we can't guarantee the alert would be detected.
+        """
         if not self.coordinator.data:
-            return False
+            return None
         state_key = self.coordinator.data.get("state", "")
-        return state_key in self._description.active_states
+        if state_key in self._description.active_states:
+            return True
+        # Unconfirmed sensor + machine not in alert state → Unknown (not OK)
+        if not self._description.confirmed_on_ena8:
+            return None
+        return False
 
     @property
     def icon(self) -> str:
         return self._description.icon_on if self.is_on else self._description.icon_off
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        if not self._description.confirmed_on_ena8:
+            return {"detection_confirmed": False}
+        return {}
 
     @property
     def available(self) -> bool:

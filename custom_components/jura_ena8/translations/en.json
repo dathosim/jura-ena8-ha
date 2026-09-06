@@ -74,7 +74,8 @@
       "latte_macchiato": { "name": "Latte Macchiato" },
       "espresso_macchiato": { "name": "Espresso Macchiato" },
       "hot_water": { "name": "Hot Water" },
-      "milk_foam": { "name": "Milk Foam" }
+      "milk_foam": { "name": "Milk Foam" },
+      "capture_diagnostic": { "name": "Capture diagnostic frame" }
     },
     "binary_sensor": {
       "cleaning_needed": { "name": "Cleaning needed" },
